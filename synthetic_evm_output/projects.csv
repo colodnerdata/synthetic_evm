@@ -1,0 +1,9 @@
+project_id,scenario,seed,wbs_partition,BAC,planned_duration_months
+P001,nominal,20260922,balanced,100000000.00,60
+P002,schedule_slip,20260922,moderate,100000000.00,60
+P003,cost_overrun,20260922,concentrated,100000000.00,60
+P004,combined_overrun,20260922,dominant_wbs,100000000.00,60
+P005,early_delay_recovery,20260922,balanced,100000000.00,60
+P006,ahead_of_plan,20260922,moderate,100000000.00,60
+P007,volatile_execution,20260922,concentrated,100000000.00,60
+P008,efficient_execution,20260922,dominant_wbs,100000000.00,60
