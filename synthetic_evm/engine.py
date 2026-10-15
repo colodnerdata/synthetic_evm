@@ -514,6 +514,7 @@ def _assign_fs_relationships(
             # predecessor's planned work ends. With zero-based starts,
             # planned_start + duration is exactly that next-month index.
             pred_finish_boundary = pred.planned_start + pred.duration
+#TODO: Revisit finish-start relationship boundary conditions. Check that naive planned starts are pushed only when before predecessor finish. Update documentation for clarity. Add more inline comments.
             if pred_finish_boundary <= succ.planned_start:
                 candidates.append(pred_idx)
                 gaps.append(succ.planned_start - pred_finish_boundary)
