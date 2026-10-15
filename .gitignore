@@ -8,3 +8,26 @@ wheels/
 
 # Virtual environments
 .venv
+venv/
+env/
+synthetic-evm/
+
+# IDE / editor
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated outputs
+output/
+*.csv
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Python tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
