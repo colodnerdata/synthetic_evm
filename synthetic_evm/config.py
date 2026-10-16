@@ -11,18 +11,28 @@ from dataclasses import dataclass
 from typing import Mapping, Tuple
 
 
-# Default project shape requested for this generator.
+# Default project shape: one $100M project, 60 months, 10 WBS elements. These
+# are the defaults of ``generate_portfolio`` and are not scenario-specific.
 DEFAULT_TOTAL_BAC = 100_000_000.0
 DEFAULT_PLAN_MONTHS = 60
 DEFAULT_N_WBS = 10
 
+# How project BAC is split across WBS elements (see ``engine.partition_bac``).
+# ``generate_portfolio`` cycles through these in order by project, so a default
+# eight-scenario portfolio exercises each one twice.
 PARTITION_METHODS = ("balanced", "moderate", "concentrated", "dominant_wbs")
+
+# Shape of a WP's planned resource consumption over its duration (see
+# ``engine._spread_weights``). Chosen uniformly at random per WP.
 SPREAD_PROFILES = ("uniform", "front_loaded", "back_loaded", "middle_peak", "two_peak")
 
-# Planned WP durations are intentionally broader than in v3. The distribution
-# is centered around roughly seven months, with a small population of short WPs
-# retained so 0/100 and 50/50 techniques still occur occasionally. Longer WPs
-# naturally fall to weighted-milestone, percent-complete, or LOE EVTs.
+# Planned WP duration distribution, in months. It is centered around roughly
+# seven months (mean about 6.9), with a small population of short WPs retained
+# so 0/100 and 50/50 techniques still occur occasionally. Longer WPs naturally
+# fall to weighted-milestone, percent-complete, or LOE EVTs.
+#
+# WP_DURATION_PROBS pairs element-for-element with WP_DURATION_MONTHS and must
+# have the same length; the engine normalizes it, but keep it summing to 1.0.
 WP_DURATION_MONTHS = tuple(range(1, 13))
 WP_DURATION_PROBS = (
     0.01,  # 1 month
@@ -43,6 +53,13 @@ WP_DURATION_PROBS = (
 # with a < b puts most observations near the low end while preserving a thinner
 # but materially longer right tail. The resulting g(t) population therefore has
 # lots of modest deviations and occasional ugly ones rather than uniform delay.
+#
+# Each draw is ``low + g_tail_scale * span * Beta(a, b)`` (see
+# ``engine._right_tail_draw``), in units of planned WP duration: 0.25 means a
+# quarter of the planned length. ``low`` is the minimum effect, ``span`` the
+# width of the beta's range at ``g_tail_scale = 1``. The engine also caps each
+# kind (``minor_delay`` 0.75, ``slow_slip`` and ``recover_early_slip`` 1.00,
+# ``stall_length`` 0.90) so a heavy tail cannot produce an absurd WP.
 G_RIGHT_TAIL = {
     "minor_delay": {"low": 0.04, "span": 0.46, "a": 1.25, "b": 3.20},
     "slow_slip": {"low": 0.08, "span": 0.70, "a": 1.25, "b": 2.80},
@@ -54,7 +71,7 @@ G_RIGHT_TAIL = {
 # A relationship is simple zero-lag Finish-to-Start (FS): a successor cannot
 # begin actual technical progress until its predecessor has actually completed.
 #
-# ``parallel`` preserves the original behavior with no explicit WP logic.
+# ``parallel`` has no explicit WP logic.
 # ``mixed_fs`` links a moderate share of eligible WPs.
 # ``fs_heavy`` links most WPs for which a sensible planned predecessor exists.
 WBS_LOGIC_PROFILES = {
@@ -69,7 +86,10 @@ class ScenarioConfig:
     """Parameters controlling schedule and cost behavior for one scenario.
 
     g_probs
-        Probability weights for WP-level actual-progress time warps.
+        Probability weights for WP-level actual-progress time warps. Keys must
+        be exactly the six kinds ``on_time``, ``minor_delay``, ``slow``,
+        ``ahead``, ``recover`` and ``stall`` (see ``engine._choose_g_profile``);
+        values are normalized, so they need not sum to 1.
     g_tail_scale
         Multiplier on right-tail schedule-slippage magnitude. Values above 1
         make delay/stall tails more severe without changing the scenario's
@@ -101,6 +121,11 @@ class ScenarioConfig:
     recovery_premium: float
 
 
+# Named scenarios, in generation order. Each becomes one project; the project's
+# ``scenario`` column carries the key. Tune a scenario by editing its values
+# here; add one by adding an entry. A scenario's random stream depends on its
+# *name* and the master seed, not its position, so adding scenarios does not
+# change the others' results (project_id numbering does shift).
 SCENARIOS = {
     "nominal": ScenarioConfig(
         g_probs={

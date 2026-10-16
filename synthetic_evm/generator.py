@@ -294,7 +294,7 @@ def validate_portfolio(data: Mapping[str, pd.DataFrame]) -> None:
             raise AssertionError("PV exists after the planned project duration.")
 
     if (monthly[["PV", "EV", "AC"]] < -0.001).any().any():
-        raise AssertionError("PV, EV, and AC must be non-negative in this version.")
+        raise AssertionError("PV, EV, and AC must be non-negative.")
 
     # Dynamic reporting means every WBS is complete by its project's final row.
     ev_sum = monthly.groupby(["project_id", "wbs_id"])["EV"].sum().round(2)

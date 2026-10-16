@@ -1,7 +1,7 @@
 [project]
 name = "synthetic-evm"
 version = "0.1.0"
-description = "Add your description here"
+description = "Synthetic project/WBS/month earned value management (PV, EV, AC) data generator"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

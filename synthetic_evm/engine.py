@@ -3,16 +3,36 @@
 The public dataset intentionally contains only project totals, WBS totals, and
 incremental WBS/month PV-EV-AC. Work packages exist only inside this module.
 
-The engine works in two phases:
+Pipeline (``generator.generate_portfolio`` drives it in two calls):
 
-1. Build all latent work packages, including their schedule time warps ``g(t)``.
-2. Add simple zero-lag Finish-to-Start logic for selected WBS archetypes and
-   propagate dependency-constrained actual starts.
-3. Simulate monthly PV/EV/AC only through the resulting project horizon.
+1. ``build_wbs_plan`` -- build every latent work package (WP) for a WBS,
+   including its schedule time warp ``g(t)``.
+2. ``_assign_fs_relationships`` (called from ``build_wbs_plan``) -- add simple
+   zero-lag Finish-to-Start logic for the WBS's logic archetype and propagate
+   dependency-constrained actual starts.
+3. ``simulate_wbs`` -- simulate monthly PV/EV/AC, only through the project
+   horizon that steps 1-2 made knowable.
 
 That means the caller never chooses an arbitrary reporting horizon. A project
-runs through month 60 at minimum so its entire PMB is present, and extends only
-as far as needed when EV finishes late.
+runs through the planned duration (60 months by default) at minimum so its
+entire PMB is present, and extends only as far as needed when EV finishes late.
+
+Conventions used throughout this module
+---------------------------------------
+* ``planned_start`` / ``actual_start`` are **zero-based** month indices, so
+  index 0 is project month 1. Values returned by ``*_completion_month`` are
+  **one-based** accounting months. ``start + elapsed_months`` is therefore both
+  "the one-based month the WP finishes in" and "the zero-based index of the
+  first month after it" -- the identity the FS logic relies on.
+* PV, EV and AC arrays are *incremental* per month, never cumulative.
+* Randomness: every function takes the caller's ``numpy.random.Generator``.
+  Draw order is part of the reproducibility contract -- adding or reordering a
+  draw changes every downstream result for a given seed.
+
+EVT abbreviations: ``0_100`` and ``50_50`` are the fixed-split earned-value
+techniques; ``weighted_milestone`` earns at milestone months; ``percent_complete``
+earns along the resource curve; ``loe`` is level-of-effort (earns with the
+passage of time, ignoring ``g(t)``).
 """
 
 from __future__ import annotations
@@ -36,12 +56,28 @@ from .config import (
 class WorkPackagePlan:
     """Internal parameters for one latent work package.
 
+    bac / planned_start / duration
+        Budget (currency units), zero-based planned start month, and planned
+        length in months.
+    evt
+        Earned-value technique; see the module docstring.
+    resource_weights
+        Length-``duration`` weights summing to 1: how the budget is *consumed*
+        (drives AC).
+    pv_weights
+        Length-``duration`` weights summing to 1: how value is *earned*
+        (drives PV and EV). Equal to ``resource_weights`` for percent-complete
+        and LOE; spiky for 0/100, 50/50 and weighted milestones.
+    g_kind / g_params
+        The schedule time warp ``g(t)`` -- see ``_choose_g_profile``.
+    cost_factor
+        Persistent cost efficiency; above 1.0 the WP costs more than budgeted.
+
     ``predecessor_idx`` is an optional zero-lag Finish-to-Start predecessor
     within the containing WBS. ``actual_start`` is resolved after the full WBS
     network is built so predecessor delay can propagate into successor work.
     Both are latent simulation details and never enter the public dataset.
     """
-
     bac: float
     planned_start: int  # zero-based month index
     duration: int
@@ -101,7 +137,19 @@ def partition_bac(
     method: str,
     rng: np.random.Generator,
 ) -> np.ndarray:
-    """Partition project BAC across WBS elements using several concentration styles."""
+    """Partition project BAC across WBS elements using several concentration styles.
+
+    Shares are Dirichlet draws; a smaller concentration parameter gives a more
+    uneven split.
+
+    ``balanced``      Dirichlet(10)  -- shares near 1/n.
+    ``moderate``      Dirichlet(2.5) -- noticeable spread.
+    ``concentrated``  Dirichlet(0.7) -- a few WBS elements hold most of the BAC.
+    ``dominant_wbs``  one random WBS takes 30-45%; the rest share the remainder.
+
+    Returns an array of length ``n_wbs`` summing to ``total_bac`` (before the
+    caller's cent rounding).
+    """
     if method == "balanced":
         weights = rng.dirichlet(np.full(n_wbs, 10.0))
     elif method == "moderate":
@@ -126,7 +174,14 @@ def make_wbs_windows(
     plan_months: int,
     rng: np.random.Generator,
 ) -> List[Tuple[int, int]]:
-    """Create overlapping planned WBS windows spanning the full baseline."""
+    """Create overlapping planned WBS windows spanning the full baseline.
+
+    Returns one ``(start, end)`` pair per WBS as zero-based inclusive month
+    indices. Starts are spread evenly over the first 68% of the baseline with
+    +/-3 months of jitter (the first WBS always starts at month 0), each window
+    spans 10-30 months, and the last window is forced to end on the final
+    baseline month so the PMB actually reaches the stated finish.
+    """
     nominal_starts = np.linspace(0, int(plan_months * 0.68), n_wbs)
     windows: List[Tuple[int, int]] = []
 
@@ -149,7 +204,11 @@ def make_wbs_windows(
 
 
 def _spread_weights(duration: int, profile: str, rng: np.random.Generator) -> np.ndarray:
-    """Generate the WP's underlying planned resource/budget consumption profile."""
+    """Generate the WP's underlying planned resource/budget consumption profile.
+
+    ``profile`` is one of ``config.SPREAD_PROFILES``. Returns ``duration``
+    non-negative weights summing to 1 (a single-month WP is always ``[1.0]``).
+    """
     if duration == 1:
         return np.array([1.0])
 
@@ -183,7 +242,11 @@ def _spread_weights(duration: int, profile: str, rng: np.random.Generator) -> np
 
 
 def _choose_evt(duration: int, rng: np.random.Generator) -> str:
-    """Choose an EVT with short-duration techniques restricted to short WPs."""
+    """Choose an EVT with short-duration techniques restricted to short WPs.
+
+    0/100 is only credible for a one-month WP and 50/50 for one or two months;
+    anything longer chooses among weighted milestone, percent complete and LOE.
+    """
     if duration == 1:
         return str(rng.choice(["0_100", "percent_complete", "loe"], p=[0.35, 0.50, 0.15]))
     if duration == 2:
@@ -207,7 +270,15 @@ def _planned_pv_weights(
     resource_weights: np.ndarray,
     rng: np.random.Generator,
 ) -> np.ndarray:
-    """Convert the WP's resource plan into its scheduled-value earning profile."""
+    """Convert the WP's resource plan into its scheduled-value earning profile.
+
+    Returns ``duration`` weights summing to 1 giving the share of WP BAC earned
+    in each planned month. Percent-complete and LOE earn exactly as resources
+    are consumed; 0/100 earns everything in the last month; 50/50 earns half in
+    the first and half in the last; weighted milestones earn at 2-5 randomly
+    chosen months (always including the last), each milestone weighted by the
+    resources planned since the previous one, +/-15%.
+    """
     if evt in {"percent_complete", "loe"}:
         return resource_weights.copy()
 
@@ -301,9 +372,8 @@ def _choose_g_profile(cfg: ScenarioConfig, rng: np.random.Generator) -> Tuple[st
         params = {
             "break_x": float(rng.uniform(0.30, 0.60)),
             "early_rate": float(1.0 / (1.0 + early_slip)),
-            # Recovery can claw back some delay, but not with the extremely
-            # aggressive rates used in v3. That keeps completion times more
-            # naturally right-shifted.
+            # Recovery can claw back some delay, but late rates are capped
+            # modestly so completion times stay naturally right-shifted.
             "late_rate": float(rng.uniform(1.04, 1.32)),
         }
     elif kind == "stall":
@@ -354,7 +424,12 @@ def _g_progress(x: np.ndarray, kind: str, params: Mapping[str, float]) -> np.nda
 
 
 def _g_completion_x(kind: str, params: Mapping[str, float]) -> float:
-    """Return normalized elapsed time x at which g(x) first reaches 100%."""
+    """Return normalized elapsed time x at which g(x) first reaches 100%.
+
+    Closed-form inverse of ``_g_progress``: ``x = 1`` means the WP finishes
+    exactly on its planned duration, ``x = 1.3`` means 30% longer. Keep the two
+    functions in step -- a new ``g`` kind needs a branch in both.
+    """
     if kind == "on_time":
         return 1.0
     if kind == "minor_delay":
@@ -396,7 +471,12 @@ def work_package_completion_month(wp: WorkPackagePlan) -> int:
 
 
 def _evaluate_cumulative_curve(local_weights: np.ndarray, progress: np.ndarray) -> np.ndarray:
-    """Evaluate a discrete planned curve at arbitrary normalized progress."""
+    """Evaluate a discrete planned curve at arbitrary normalized progress.
+
+    ``local_weights`` are per-month shares; the cumulative curve is linearly
+    interpolated between month boundaries, so fractional progress (as produced
+    by ``g(t)``) maps to a fractional cumulative share in [0, 1].
+    """
     duration = len(local_weights)
     x_grid = np.r_[0.0, np.arange(1, duration + 1) / duration]
     y_grid = np.r_[0.0, np.cumsum(local_weights)]
@@ -408,7 +488,13 @@ def make_period_cost_effects(
     cfg: ScenarioConfig,
     rng: np.random.Generator,
 ) -> np.ndarray:
-    """Create project-wide monthly multiplicative AC effects."""
+    """Create project-wide monthly multiplicative AC effects.
+
+    Combines a linear drift (to ``1 + drift_end``), 1.2% month-to-month noise,
+    and a Poisson number of 1-3 month cost shocks, then clips to [0.70, 1.60].
+    Drawn once per project and shared by every WBS, so cost pressure is
+    correlated across the project rather than independent per WP.
+    """
     drift_end = float(rng.normal(cfg.drift_mean, cfg.drift_sd))
     effects = np.linspace(1.0, 1.0 + drift_end, report_months)
     effects *= np.exp(rng.normal(0.0, 0.012, report_months))
@@ -431,7 +517,12 @@ def _make_rework_costs(
     report_months: int,
     rng: np.random.Generator,
 ) -> np.ndarray:
-    """Occasionally add modest cost-only rework without extra earned value."""
+    """Occasionally add modest cost-only rework without extra earned value.
+
+    With probability ``cfg.rework_prob`` one 1-2 month cost bump (a
+    ``cfg.rework_range`` fraction of WP BAC) lands on a random active month.
+    It adds to AC only -- EV is unchanged, which is what makes it rework.
+    """
     result = np.zeros(report_months)
     if len(active_months) == 0 or rng.random() >= cfg.rework_prob:
         return result
@@ -514,7 +605,12 @@ def _assign_fs_relationships(
             # predecessor's planned work ends. With zero-based starts,
             # planned_start + duration is exactly that next-month index.
             pred_finish_boundary = pred.planned_start + pred.duration
-#TODO: Revisit finish-start relationship boundary conditions. Check that naive planned starts are pushed only when before predecessor finish. Update documentation for clarity. Add more inline comments.
+
+            # Eligibility is judged on the *planned* baseline only: the edge is
+            # added when the predecessor's planned finish boundary is at or
+            # before the successor's planned start (gap >= 0). Such an edge
+            # cannot move PV, and cannot create a cycle, because every
+            # predecessor starts strictly earlier than its successor.
             if pred_finish_boundary <= succ.planned_start:
                 candidates.append(pred_idx)
                 gaps.append(succ.planned_start - pred_finish_boundary)
@@ -529,8 +625,17 @@ def _assign_fs_relationships(
         weights /= weights.sum()
         succ.predecessor_idx = int(rng.choice(candidates, p=weights))
 
-    # Resolve actual starts in topological order. A predecessor's own g(t) and
-    # any upstream FS delay are already reflected in its completion month.
+    # Resolve actual starts in topological order (``order`` is sorted by planned
+    # start, and every predecessor starts earlier than its successor). A
+    # predecessor's own g(t) and any upstream FS delay are already reflected in
+    # its completion month.
+    #
+    # ``work_package_completion_month`` is one-based, so it equals the
+    # zero-based index of the first month *after* the predecessor finishes --
+    # the earliest legal successor start. ``max`` with the planned start means
+    # a successor is pushed right ONLY when its predecessor finishes later than
+    # the baseline allowed; an on-time or early predecessor leaves the
+    # successor on its planned start (successors never start early).
     for idx in order:
         wp = work_packages[idx]
         if wp.predecessor_idx is None:
@@ -567,7 +672,26 @@ def build_wbs_plan(
     cfg: ScenarioConfig,
     rng: np.random.Generator,
 ) -> WbsPlan:
-    """Generate latent WPs and their schedule/cost parameters for one WBS."""
+    """Generate latent WPs and their schedule/cost parameters for one WBS.
+
+    Parameters
+    ----------
+    wbs_bac
+        Budget for this WBS element.
+    wbs_start, wbs_end
+        Zero-based inclusive planned window from ``make_wbs_windows``.
+    mean_wbs_bac
+        Project BAC / n_wbs; used to scale the WP count so larger WBS elements
+        get more (5-20) work packages.
+    cfg, rng
+        Scenario assumptions and the shared random generator.
+
+    Returns
+    -------
+    WbsPlan
+        WPs with planned dates, EVT, g(t), cost factor, and resolved FS links.
+        The FS network is validated before returning.
+    """
     wbs_span = wbs_end - wbs_start + 1
     size_ratio = wbs_bac / mean_wbs_bac
     expected_wps = 7.0 + 4.5 * np.sqrt(max(size_ratio, 0.1))
@@ -626,7 +750,14 @@ def _simulate_work_package(
     project_period_cost_effect: np.ndarray,
     rng: np.random.Generator,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Simulate one pre-built latent WP and return incremental monthly PV, EV, and AC."""
+    """Simulate one pre-built latent WP and return incremental monthly PV, EV, and AC.
+
+    PV follows the planned dates; EV follows ``g(t)`` from the (possibly
+    FS-delayed) actual start; AC follows the *resource* curve at actual
+    progress, scaled by the WP cost factor, the project-wide period effect, an
+    expediting premium on faster-than-planned months, 1% noise, and any rework.
+    All three arrays have length ``report_months``.
+    """
     report_index = np.arange(report_months)
 
     # Planned progress remains tied to the PMB dates. Actual progress uses the
@@ -686,7 +817,12 @@ def simulate_wbs(
     project_period_cost_effect: np.ndarray,
     rng: np.random.Generator,
 ) -> WbsSimulation:
-    """Simulate a pre-built WBS plan and return only WBS-level monthly totals."""
+    """Simulate a pre-built WBS plan and return only WBS-level monthly totals.
+
+    Sums the incremental PV/EV/AC of every WP in the plan; the WP detail is
+    discarded here, which is how the latent structure stays out of the public
+    output.
+    """
     pv = np.zeros(report_months)
     ev = np.zeros(report_months)
     ac = np.zeros(report_months)
