@@ -93,6 +93,26 @@ def test_relative_links_and_anchors_resolve(doc):
     assert not problems, problems
 
 
+def test_the_docs_are_uv_only():
+    """Every shell command the docs show goes through uv, and nothing mentions pip."""
+    commands = []
+    for doc in DOCS:
+        for block in re.findall(r"^```(?:bash|sh|shell|console)\n(.*?)^```", _text(doc), re.S | re.M):
+            for line in block.splitlines():
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    commands.append((doc.name, line))
+    assert commands, "the docs no longer show any shell commands"
+    assert [command for command in commands if not command[1].startswith("uv ")] == []
+
+    for path in [*DOCS, ROOT / "generate_evm.py"]:
+        text = _text(path)
+        assert not re.search(r"\bpip\b", text), f"{path.name} mentions pip"
+        assert not re.search(r"(?<!uv run )python generate_evm\.py", text), (
+            f"{path.name} runs the generator without uv"
+        )
+
+
 def test_the_readme_python_example_runs(monkeypatch, tmp_path):
     blocks = re.findall(r"^```python\n(.*?)^```", _text(README), re.S | re.M)
     assert blocks, "the README no longer shows a Python example"

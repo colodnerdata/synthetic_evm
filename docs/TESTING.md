@@ -10,7 +10,7 @@ uv run pytest         # the whole suite
 uv run ruff check .   # lint
 ```
 
-Without uv, install the package and the two dev tools (`pip install . pytest ruff`) and run `pytest` and `ruff check .` from the repository root. The suite runs in well under a minute. Nothing in it writes into the repository: every export goes to a temporary directory.
+The suite runs in well under a minute. Nothing in it writes into the repository: every export goes to a temporary directory.
 
 ## Principles
 
@@ -64,7 +64,7 @@ A few checks assert that scenarios behave as their names say: efficient executio
 `synthetic_evm_output/` is the default-seed run. `test_sample_output.py` regenerates it in memory and compares every table, with amounts to the cent, and rejects a byte-order mark such as a spreadsheet re-save leaves. It is the one deliberate snapshot: a change to the engine or configuration that alters the default-seed numbers fails it until the sample is regenerated and committed with that change.
 
 ```bash
-python generate_evm.py --seed 20260922 --out synthetic_evm_output
+uv run python generate_evm.py --seed 20260922 --out synthetic_evm_output
 ```
 
 ## Not covered

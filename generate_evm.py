@@ -4,11 +4,11 @@ Examples
 --------
 Generate the default portfolio with a new random seed::
 
-    python generate_evm.py --seed 12345 --out output
+    uv run python generate_evm.py --seed 12345 --out output
 
 Generate only selected scenarios::
 
-    python generate_evm.py --seed 42 --scenarios nominal combined_overrun --out output
+    uv run python generate_evm.py --seed 42 --scenarios nominal combined_overrun --out output
 
 The reporting life is derived automatically from the simulated EV behavior.
 """

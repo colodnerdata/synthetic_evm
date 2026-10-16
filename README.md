@@ -6,16 +6,11 @@ The generator is seeded and deterministic: the same seed and settings reproduce 
 
 ## Getting started
 
-Requires Python 3.13+ (see `.python-version`), `numpy` and `pandas`.
+Everything runs through [uv](https://docs.astral.sh/uv/), which installs Python 3.13 (see `.python-version`) and the dependencies pinned in `uv.lock` (`numpy`, `pandas`).
 
 ```bash
-# With uv (installs the pinned versions from uv.lock)
 uv sync
 uv run python generate_evm.py --seed 12345 --out output
-
-# Or with pip (dependencies are declared in pyproject.toml)
-pip install .
-python generate_evm.py --seed 12345 --out output
 ```
 
 The runner prints the project count and the range of dynamic reporting horizons, then writes `projects.csv`, `wbs_totals.csv` and `monthly.csv` to `--out`.
@@ -26,7 +21,7 @@ The runner prints the project count and the range of dynamic reporting horizons,
 | `--out` | `synthetic_evm_output` | Output directory (created if missing). |
 | `--scenarios` | all | Space-separated scenario names, e.g. `--scenarios nominal combined_overrun`. |
 
-`synthetic_evm_output/` is a committed sample generated with the default seed (`python generate_evm.py`), so you can inspect the shape of the data without running anything. Generated CSVs elsewhere are gitignored.
+`synthetic_evm_output/` is a committed sample generated with the default seed (`uv run python generate_evm.py`), so you can inspect the shape of the data without running anything. Generated CSVs elsewhere are gitignored.
 
 ### Choose a starting point
 
