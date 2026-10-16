@@ -33,6 +33,7 @@ The suite runs in well under a minute. Nothing in it writes into the repository:
 | `test_validate.py` | Every failure mode of `validate_portfolio`. | A valid portfolio corrupted one way at a time. |
 | `test_io_cli.py` | CSV export, `generate_evm.py` and the `synthetic_evm_generator.py` alias. | Round trips; running the script as a subprocess. |
 | `test_sample_output.py` | The committed sample equals the default-seed run. | Regeneration. |
+| `test_charts_workbook.py` | The `pCsvPath` Power Query parameter overwrite: M text literals, the COM call sequence, every skip and error path, the CLI wiring, the committed workbook's DataMashup, and the Windows-only dependency. | A fake Excel object model; M's escaping rules; the workbook read as a zip. |
 | `test_docs.py` | Links and anchors, the README example, options, defaults and named constants. | The docs read against the code. |
 
 `tests/helpers.py` holds the shared builders (`make_wp`, a scripted generator for the FS assignment) and `tests/conftest.py` the session fixtures, so the portfolios the tests share are generated once.
@@ -53,6 +54,8 @@ The suite runs in well under a minute. Nothing in it writes into the repository:
 
 **Randomness and position.** A scenario draws from its own generator seeded by the master seed and a hash of its name, so other scenarios never influence its draws. Its position still matters: the project id and the BAC-partition style are both assigned by position. A scenario therefore reproduces exactly when it keeps its position, whatever follows or precedes it elsewhere in the list, and changes when it moves.
 
+**Power Query parameter.** The charts workbook's `pCsvPath` is an M expression: a text literal followed by a `meta` record. In an M text literal a double quote is written `""` and `#(` opens an escape sequence, so a literal `#(` is written `#(#)(`. The overwrite is idempotent: it saves only when the value changes, so a run that writes to the same place leaves the workbook untouched, and it always closes the workbook and quits Excel.
+
 **Dynamic horizon.** A project reports through `max(planned duration, month of final EV)`. The suite recomputes that from the public tables alone: the last month with `EV > 0`.
 
 ## Scenario semantics
@@ -70,6 +73,7 @@ uv run python generate_evm.py --seed 20260922 --out synthetic_evm_output
 ## Not covered
 
 - The Excel workbooks (`monthly.xlsx`, `EVM Concepts Graphs.xlsx`) are hand-built and are reviewed in [WORKBOOK_REVIEW.md](WORKBOOK_REVIEW.md); the suite does not open them.
+- Real Excel. The COM calls behind the charts-workbook overwrite are checked against a fake object model, and `monthly_charts.xlsx` is checked as a zip; opening it in Excel and running the overwrite on Windows are outside the suite.
 - Individual random draws are not pinned, apart from the committed sample.
 - Run time is not measured.
 

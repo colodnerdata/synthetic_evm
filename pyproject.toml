@@ -18,6 +18,11 @@ dev = [
     "pytest>=8",
     "ruff>=0.8",
 ]
+# pywin32 drives desktop Excel for the charts-workbook step of a run. It is Windows-only,
+# so the marker keeps it out of every other platform's environment.
+excel = [
+    "pywin32>=312; sys_platform == 'win32'",
+]
 
 # Only the library package is installed; generate_evm.py is the repo's runner
 # script and synthetic_evm_generator.py an alias, both run from a checkout.
@@ -40,3 +45,7 @@ target-version = "py313"
 # Correctness rules only: pyflakes plus the pycodestyle error classes that flag
 # bugs (syntax, comparisons, statement structure). Style rules are not enforced.
 select = ["E4", "E7", "E9", "F"]
+
+[tool.uv]
+# A plain `uv sync` / `uv run` installs the dev tools and, on Windows, pywin32.
+default-groups = ["dev", "excel"]
