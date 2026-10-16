@@ -9,12 +9,12 @@ The generator is seeded and deterministic: the same seed and settings reproduce 
 Requires Python 3.13+ (see `.python-version`), `numpy` and `pandas`.
 
 ```bash
-# With uv (uses pyproject.toml / uv.lock)
+# With uv (installs the pinned versions from uv.lock)
 uv sync
 uv run python generate_evm.py --seed 12345 --out output
 
-# Or with pip
-pip install -r requirements.txt
+# Or with pip (dependencies are declared in pyproject.toml)
+pip install .
 python generate_evm.py --seed 12345 --out output
 ```
 

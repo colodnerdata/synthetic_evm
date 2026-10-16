@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
 [project]
 name = "synthetic-evm"
 version = "0.1.0"
@@ -8,3 +12,8 @@ dependencies = [
     "numpy>=2.5.3",
     "pandas>=3.0.6",
 ]
+
+# Only the library package is installed; generate_evm.py is the repo's runner
+# script and synthetic_evm_generator.py an alias, both run from a checkout.
+[tool.hatch.build.targets.wheel]
+packages = ["synthetic_evm"]
