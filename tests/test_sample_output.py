@@ -16,7 +16,7 @@ import pytest
 from tests.helpers import DEFAULT_SEED
 
 SAMPLE = Path(__file__).resolve().parents[1] / "synthetic_evm_output"
-REGENERATE = f"python generate_evm.py --seed {DEFAULT_SEED} --out synthetic_evm_output"
+REGENERATE = f"uv run python generate_evm.py --seed {DEFAULT_SEED} --out synthetic_evm_output"
 TEXT_COLUMNS = {"project_id": str, "wbs_id": str, "scenario": str, "wbs_partition": str}
 
 

@@ -4,13 +4,16 @@ Examples
 --------
 Generate the default portfolio with a new random seed::
 
-    python generate_evm.py --seed 12345 --out output
+    uv run python generate_evm.py --seed 12345 --out output
 
 Generate only selected scenarios::
 
-    python generate_evm.py --seed 42 --scenarios nominal combined_overrun --out output
+    uv run python generate_evm.py --seed 42 --scenarios nominal combined_overrun --out output
 
 The reporting life is derived automatically from the simulated EV behavior.
+
+If a ``monthly_charts.xlsx`` sits beside the CSVs, its ``pCsvPath`` Power Query parameter is pointed at the
+new ``monthly.csv`` (Windows with desktop Excel; see ``synthetic_evm/charts_workbook.py``).
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ from __future__ import annotations
 import argparse
 
 from synthetic_evm import export_csvs, generate_portfolio
+from synthetic_evm.charts_workbook import update_charts_workbook
 
 
 def main() -> None:
@@ -47,6 +51,9 @@ def main() -> None:
     print(f"Projects:   {paths['projects']}")
     print(f"WBS totals: {paths['wbs_totals']}")
     print(f"Monthly:    {paths['monthly']}")
+    charts = update_charts_workbook(paths["monthly"])
+    if charts:
+        print(f"Charts:     {charts}")
 
 
 if __name__ == "__main__":
