@@ -97,7 +97,8 @@ def generate_portfolio(
     seed:
         Master random seed. Change it to produce a new portfolio.
     scenarios:
-        Scenario names to generate. Defaults to every configured scenario.
+        Scenario names to generate. Defaults to every configured scenario;
+        when given, it must name at least one.
     total_bac:
         BAC for *each* project. Default is $100M.
     plan_months:
@@ -127,6 +128,12 @@ def generate_portfolio(
 
         ``monthly``: project_id, wbs_id, month, PV, EV, AC
 
+    Raises
+    ------
+    ValueError
+        If ``plan_months`` or ``n_wbs`` is less than 1, if ``scenarios`` is
+        given but empty, or if it names a scenario that is not configured.
+
     Notes
     -----
     Work packages, EVTs, spread profiles, g(t), and cost factors are latent.
@@ -138,6 +145,10 @@ def generate_portfolio(
         raise ValueError("n_wbs must be positive")
 
     scenario_names = list(SCENARIOS) if scenarios is None else list(scenarios)
+    if not scenario_names:
+        raise ValueError(
+            "scenarios must name at least one scenario; omit it to generate all configured scenarios"
+        )
     unknown = [name for name in scenario_names if name not in SCENARIOS]
     if unknown:
         raise ValueError(f"Unknown scenarios: {unknown}")
