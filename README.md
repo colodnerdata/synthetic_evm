@@ -35,6 +35,7 @@ The runner prints the project count and the range of dynamic reporting horizons,
 | Get a dataset | Run `generate_evm.py` (above) or open the committed sample in `synthetic_evm_output/`. |
 | Explore the sample in Excel | Open `synthetic_evm_output/monthly.xlsx` — see [The pivot demo](#the-pivot-demo). |
 | Use it from code | See [Use from Python](#use-from-python). |
+| Run or extend the tests | See [Development](#development) and [docs/TESTING.md](docs/TESTING.md). |
 | Change what the portfolio looks like | Edit `synthetic_evm/config.py` — see [Tuning the assumptions](#tuning-the-assumptions). |
 | Understand how the numbers are produced | Read [How the simulation works](#how-the-simulation-works), then `synthetic_evm/engine.py`. |
 | See the EVM concepts as charts | Open `EVM Concepts Graphs.xlsx` — see [The concepts workbook](#the-concepts-workbook). |
@@ -105,7 +106,7 @@ The simulation is split so a reader can follow one idea at a time. Every concept
 
 ### Reproducibility
 
-Each scenario draws from its own generator seeded by `(master seed, CRC32 of the scenario name)`. Adding or reordering scenarios therefore does not change another scenario's simulated behavior (its `project_id` may change). Within a scenario, the order of random draws is part of the contract: adding a draw to the engine changes every result for a given seed, so a draw-order change alters every dataset generated from the same seed.
+Each scenario draws from its own generator seeded by `(master seed, CRC32 of the scenario name)`, so other scenarios never change its random draws. Its position in the run still matters: `project_id` and the BAC-partition style are both assigned by position (the four styles cycle in order), so a scenario reproduces exactly when it keeps its position and changes when it moves. Within a scenario, the order of random draws is part of the contract: adding or reordering a draw in the engine alters every dataset generated from the same seed.
 
 ## Tuning the assumptions
 
@@ -114,7 +115,7 @@ All assumptions live in `synthetic_evm/config.py`; the engine only converts them
 | To change… | Edit |
 |---|---|
 | Default project shape | `DEFAULT_TOTAL_BAC`, `DEFAULT_PLAN_MONTHS`, `DEFAULT_N_WBS` (or pass them to `generate_portfolio`) |
-| The WP duration mix (currently 1–12 months, mean ≈ 6.9) | `WP_DURATION_MONTHS` and `WP_DURATION_PROBS` (equal length, sum to 1) |
+| The WP duration mix (default 1–12 months, mean ≈ 6.9) | `WP_DURATION_MONTHS` and `WP_DURATION_PROBS` (equal length, sum to 1) |
 | The shape of the delay tail | `G_RIGHT_TAIL` |
 | How severe a scenario's delay tail is, without changing its mix of g(t) kinds | that scenario's `g_tail_scale` |
 | How often each kind of schedule behavior occurs | that scenario's `g_probs` |
@@ -144,6 +145,16 @@ export_csvs(data, "output")
 
 `synthetic_evm_generator.py` is a thin alias that re-exports the public API from `synthetic_evm`; import from `synthetic_evm` directly.
 
+## Development
+
+```bash
+uv sync --locked      # runtime and dev dependencies, pinned by uv.lock
+uv run pytest         # tests
+uv run ruff check .   # lint
+```
+
+[docs/TESTING.md](docs/TESTING.md) is the test plan: what each module protects, the concepts behind the numerical checks, and how CI runs them (`.github/workflows/ci.yml`).
+
 ## Project layout
 
 | Path | Responsibility |
@@ -153,9 +164,13 @@ export_csvs(data, "output")
 | `synthetic_evm/generator.py` | Public output assembly, cent reconciliation and `validate_portfolio`. |
 | `synthetic_evm/io.py` | CSV export only. |
 | `generate_evm.py` | Thin command-line runner. |
+| `tests/` | Pytest suite, described in `docs/TESTING.md`. |
+| `.github/workflows/ci.yml` | CI: tests on Python 3.13 and 3.14, and lint. |
+| `pyproject.toml`, `uv.lock` | Dependencies (single source), build backend, and pytest and ruff settings; the lock pins versions for CI. |
 | `synthetic_evm_generator.py` | Alias re-exporting the public API (`generate_portfolio`, `validate_portfolio`, `export_csvs`). |
 | `synthetic_evm_output/` | Committed sample output (default seed) and `monthly.xlsx`, a PivotTable demo over it. |
 | `EVM Concepts Graphs.xlsx` | Hand-built workbook illustrating EVM concepts. |
+| `docs/TESTING.md` | The test plan. |
 | `docs/WORKBOOK_REVIEW.md` | Suggested changes to the workbook, mapped to the Lambda Catalog design principles. |
 
 ## The pivot demo
