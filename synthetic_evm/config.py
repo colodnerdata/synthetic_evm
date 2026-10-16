@@ -71,7 +71,7 @@ G_RIGHT_TAIL = {
 # A relationship is simple zero-lag Finish-to-Start (FS): a successor cannot
 # begin actual technical progress until its predecessor has actually completed.
 #
-# ``parallel`` preserves the original behavior with no explicit WP logic.
+# ``parallel`` has no explicit WP logic.
 # ``mixed_fs`` links a moderate share of eligible WPs.
 # ``fs_heavy`` links most WPs for which a sensible planned predecessor exists.
 WBS_LOGIC_PROFILES = {

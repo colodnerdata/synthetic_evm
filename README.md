@@ -100,7 +100,7 @@ The simulation is split so a reader can follow one idea at a time. Every concept
 
 ### Reproducibility
 
-Each scenario draws from its own generator seeded by `(master seed, CRC32 of the scenario name)`. Adding or reordering scenarios therefore does not change another scenario's simulated behavior (its `project_id` may change). Within a scenario, the order of random draws is part of the contract: adding a draw to the engine changes every result for a given seed, so treat that as a breaking change to previously generated datasets.
+Each scenario draws from its own generator seeded by `(master seed, CRC32 of the scenario name)`. Adding or reordering scenarios therefore does not change another scenario's simulated behavior (its `project_id` may change). Within a scenario, the order of random draws is part of the contract: adding a draw to the engine changes every result for a given seed, so a draw-order change alters every dataset generated from the same seed.
 
 ## Tuning the assumptions
 
@@ -137,7 +137,7 @@ s_curves = p1.groupby("month")[["PV", "EV", "AC"]].sum().cumsum()
 export_csvs(data, "output")
 ```
 
-`synthetic_evm_generator.py` is a compatibility facade for the original single-file module name; new code should import from `synthetic_evm`.
+`synthetic_evm_generator.py` is a thin alias that re-exports the public API from `synthetic_evm`; import from `synthetic_evm` directly.
 
 ## Project layout
 
@@ -148,11 +148,11 @@ export_csvs(data, "output")
 | `synthetic_evm/generator.py` | Public output assembly, cent reconciliation and `validate_portfolio`. |
 | `synthetic_evm/io.py` | CSV export only. |
 | `generate_evm.py` | Thin command-line runner. |
-| `synthetic_evm_generator.py` | Backward-compatible import path. |
+| `synthetic_evm_generator.py` | Alias re-exporting the public API (`generate_portfolio`, `validate_portfolio`, `export_csvs`). |
 | `synthetic_evm_output/` | Committed sample output (default seed). |
-| `EVM Concepts Graphs.xlsx` | Hand-built workbook illustrating EVM concepts (in progress). |
+| `EVM Concepts Graphs.xlsx` | Hand-built workbook illustrating EVM concepts. |
 | `docs/WORKBOOK_REVIEW.md` | Suggested changes to the workbook, mapped to the Lambda Catalog design principles. |
 
 ## The concepts workbook
 
-`EVM Concepts Graphs.xlsx` is **independent of the generator**: it does not read the CSVs. A single `Chart Data` sheet drives seven chart sheets (Program Baseline, Collected Data, Variances, Earned Schedule, Future Actuals and EV, Rebaselining, Complete) that build up the EVM story one concept at a time. Its inputs are the labelled cells at the top-left of `Chart Data` (planned duration, BAC, baseline-change point, actual duration and cost, "now", and the sigmoid truncation parameters that shape the S-curves); the `Cumulative_EVM` table beside them holds the PV/EV/AC curves and derived CPI, SPI and earned schedule. It is a work in progress; [`docs/WORKBOOK_REVIEW.md`](docs/WORKBOOK_REVIEW.md) lists suggested clean-ups.
+`EVM Concepts Graphs.xlsx` is **independent of the generator**: it does not read the CSVs. A single `Chart Data` sheet drives seven chart sheets (Program Baseline, Collected Data, Variances, Earned Schedule, Future Actuals and EV, Rebaselining, Complete) that build up the EVM story one concept at a time. Its inputs are the labelled cells at the top-left of `Chart Data` (planned duration, BAC, baseline-change point, actual duration and cost, "now", and the sigmoid truncation parameters that shape the S-curves); the `Cumulative_EVM` table beside them holds the PV/EV/AC curves and derived CPI, SPI and earned schedule. [`docs/WORKBOOK_REVIEW.md`](docs/WORKBOOK_REVIEW.md) lists suggested improvements.

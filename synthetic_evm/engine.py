@@ -372,9 +372,8 @@ def _choose_g_profile(cfg: ScenarioConfig, rng: np.random.Generator) -> Tuple[st
         params = {
             "break_x": float(rng.uniform(0.30, 0.60)),
             "early_rate": float(1.0 / (1.0 + early_slip)),
-            # Recovery can claw back some delay, but not with the extremely
-            # aggressive rates used in v3. That keeps completion times more
-            # naturally right-shifted.
+            # Recovery can claw back some delay, but late rates are capped
+            # modestly so completion times stay naturally right-shifted.
             "late_rate": float(rng.uniform(1.04, 1.32)),
         }
     elif kind == "stall":

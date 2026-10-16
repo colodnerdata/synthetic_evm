@@ -1,8 +1,7 @@
-"""Compatibility facade for the original single-file module name.
+"""Alias module re-exporting the public API of the ``synthetic_evm`` package.
 
-For new code, prefer importing from ``synthetic_evm`` directly. This file keeps
-the original ``synthetic_evm_generator`` import path usable now that the
-implementation lives in the ``synthetic_evm`` package.
+Prefer importing from ``synthetic_evm`` directly; this module exposes the same
+``generate_portfolio``, ``validate_portfolio`` and ``export_csvs`` names.
 
 Run as a script it generates the default portfolio (seed 20260922) into
 ``synthetic_evm_output/``, the same files that are committed to the repo.
