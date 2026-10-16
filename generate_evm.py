@@ -26,9 +26,9 @@ def main() -> None:
     parser.add_argument("--out", default="synthetic_evm_output", help="Output directory.")
     parser.add_argument(
         "--scenarios",
-        nargs="*",
+        nargs="+",
         default=None,
-        help="Optional scenario names. Omit to generate all configured scenarios.",
+        help="Scenario names to generate (one or more). Omit to generate all configured scenarios.",
     )
     args = parser.parse_args()
 

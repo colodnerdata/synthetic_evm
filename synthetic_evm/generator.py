@@ -44,9 +44,10 @@ PUBLIC_TABLES = ("projects", "wbs_totals", "monthly")
 def _scenario_rng(seed: int, scenario_name: str) -> np.random.Generator:
     """Create stable per-scenario randomness from the portfolio seed.
 
-    Tying a child RNG to the scenario name means inserting/reordering other
-    scenarios does not silently change this scenario's random stream. The
-    project_id can change with ordering; its simulated behavior does not.
+    Tying a child RNG to the scenario name means other scenarios never change
+    this scenario's random stream. Its position still matters: ``project_id``
+    and the BAC-partition style are both assigned by position (see
+    ``generate_portfolio``), so moving a scenario changes its numbers.
     """
     scenario_code = zlib.crc32(scenario_name.encode("utf-8"))
     return np.random.default_rng(np.random.SeedSequence([int(seed), int(scenario_code)]))
@@ -97,7 +98,8 @@ def generate_portfolio(
     seed:
         Master random seed. Change it to produce a new portfolio.
     scenarios:
-        Scenario names to generate. Defaults to every configured scenario.
+        Scenario names to generate. Defaults to every configured scenario;
+        when given, it must name at least one.
     total_bac:
         BAC for *each* project. Default is $100M.
     plan_months:
@@ -127,6 +129,12 @@ def generate_portfolio(
 
         ``monthly``: project_id, wbs_id, month, PV, EV, AC
 
+    Raises
+    ------
+    ValueError
+        If ``plan_months`` or ``n_wbs`` is less than 1, if ``scenarios`` is
+        given but empty, or if it names a scenario that is not configured.
+
     Notes
     -----
     Work packages, EVTs, spread profiles, g(t), and cost factors are latent.
@@ -138,6 +146,10 @@ def generate_portfolio(
         raise ValueError("n_wbs must be positive")
 
     scenario_names = list(SCENARIOS) if scenarios is None else list(scenarios)
+    if not scenario_names:
+        raise ValueError(
+            "scenarios must name at least one scenario; omit it to generate all configured scenarios"
+        )
     unknown = [name for name in scenario_names if name not in SCENARIOS]
     if unknown:
         raise ValueError(f"Unknown scenarios: {unknown}")
@@ -153,6 +165,7 @@ def generate_portfolio(
 
         # Cycle the named partition schemes so a default portfolio demonstrates
         # all of them rather than trusting randomness to be pedagogically useful.
+        # The style follows the scenario's position in the run, not its name.
         partition_method = PARTITION_METHODS[(p_idx - 1) % len(PARTITION_METHODS)]
         raw_wbs_bacs = partition_bac(total_bac, n_wbs, partition_method, rng)
         wbs_bacs = _round_partition_to_cents(raw_wbs_bacs, total_bac)

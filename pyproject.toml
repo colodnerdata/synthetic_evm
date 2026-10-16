@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
 [project]
 name = "synthetic-evm"
 version = "0.1.0"
@@ -8,3 +12,31 @@ dependencies = [
     "numpy>=2.5.3",
     "pandas>=3.0.6",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.8",
+]
+
+# Only the library package is installed; generate_evm.py is the repo's runner
+# script and synthetic_evm_generator.py an alias, both run from a checkout.
+[tool.hatch.build.targets.wheel]
+packages = ["synthetic_evm"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Put the repository root on sys.path so the tests can import the runner scripts
+# (generate_evm.py, synthetic_evm_generator.py), which are not part of the wheel.
+pythonpath = ["."]
+# A numerical simulator should not emit warnings (overflow, invalid value,
+# deprecations) unnoticed.
+filterwarnings = ["error"]
+
+[tool.ruff]
+target-version = "py313"
+
+[tool.ruff.lint]
+# Correctness rules only: pyflakes plus the pycodestyle error classes that flag
+# bugs (syntax, comparisons, statement structure). Style rules are not enforced.
+select = ["E4", "E7", "E9", "F"]
