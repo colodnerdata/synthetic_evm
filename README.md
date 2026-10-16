@@ -26,13 +26,14 @@ The runner prints the project count and the range of dynamic reporting horizons,
 | `--out` | `synthetic_evm_output` | Output directory (created if missing). |
 | `--scenarios` | all | Space-separated scenario names, e.g. `--scenarios nominal combined_overrun`. |
 
-`synthetic_evm_output/` is a committed sample generated with the default seed, so you can inspect the shape of the data without running anything. (Generated CSVs elsewhere are gitignored. The committed `monthly.csv` was re-saved by Excel — it carries a UTF-8 BOM and its `wbs_id` values read `1`, not `01`. Regenerating gives the exact same numbers with `01`.)
+`synthetic_evm_output/` is a committed sample generated with the default seed (`python generate_evm.py`), so you can inspect the shape of the data without running anything. Generated CSVs elsewhere are gitignored.
 
 ### Choose a starting point
 
 | If you want to… | Start here |
 |---|---|
 | Get a dataset | Run `generate_evm.py` (above) or open the committed sample in `synthetic_evm_output/`. |
+| Explore the sample in Excel | Open `synthetic_evm_output/monthly.xlsx` — see [The pivot demo](#the-pivot-demo). |
 | Use it from code | See [Use from Python](#use-from-python). |
 | Change what the portfolio looks like | Edit `synthetic_evm/config.py` — see [Tuning the assumptions](#tuning-the-assumptions). |
 | Understand how the numbers are produced | Read [How the simulation works](#how-the-simulation-works), then `synthetic_evm/engine.py`. |
@@ -64,6 +65,10 @@ One row per project/WBS: `project_id`, `wbs_id` (`01`, `02`, … — keep it as 
 One row per project/WBS/month: `project_id`, `wbs_id`, `month` (1-based), `PV`, `EV`, `AC`.
 
 `PV`, `EV` and `AC` are **incremental period values, not cumulative**. Cumulate them with a running sum per project (or per WBS) to get the S-curves.
+
+### Opening the CSVs in Excel
+
+Excel treats `wbs_id` as a number when it opens a CSV directly, so `01` becomes `1` and saving writes that back. To keep the leading zero, load the file with *Data → From Text/CSV* (or Power Query) and set `wbs_id` to **Text**, or treat `wbs_id` as a label rather than a number in your analysis.
 
 ### Invariants
 
@@ -149,9 +154,15 @@ export_csvs(data, "output")
 | `synthetic_evm/io.py` | CSV export only. |
 | `generate_evm.py` | Thin command-line runner. |
 | `synthetic_evm_generator.py` | Alias re-exporting the public API (`generate_portfolio`, `validate_portfolio`, `export_csvs`). |
-| `synthetic_evm_output/` | Committed sample output (default seed). |
+| `synthetic_evm_output/` | Committed sample output (default seed) and `monthly.xlsx`, a PivotTable demo over it. |
 | `EVM Concepts Graphs.xlsx` | Hand-built workbook illustrating EVM concepts. |
 | `docs/WORKBOOK_REVIEW.md` | Suggested changes to the workbook, mapped to the Lambda Catalog design principles. |
+
+## The pivot demo
+
+`synthetic_evm_output/monthly.xlsx` is an Excel demo built on the sample `monthly` table. A Power Query named `monthly` loads `monthly.csv` into a table on the `monthly` sheet, and `Sheet1` summarizes it: a PivotTable of total AC, PV and EV by month, a `project_id` filter and slicer, and a line PivotChart of the three series.
+
+The query reads the CSV from a fixed path on the machine where the workbook was built, and it types `wbs_id` as a whole number. To refresh the demo against your own copy, open *Data → Queries & Connections*, edit the `monthly` query's `Source` step to point at your `monthly.csv`, set `wbs_id` to Text if you need the leading zero, and choose *Refresh All*.
 
 ## The concepts workbook
 
